@@ -279,7 +279,10 @@ const TeamPage = () => {
 
   // Create Form
   const createForm = useForm({
-    resolver: zodResolver(staffCreateSchema)
+    resolver: zodResolver(staffCreateSchema),
+    defaultValues: {
+      branch: user?.role !== 'owner' ? user?.branch : undefined
+    }
   });
 
   // Edit Form
@@ -635,9 +638,16 @@ const TeamPage = () => {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">Select Role...</option>
-                <option value="owner">Owner</option>
-                <option value="manager">Manager</option>
-                <option value="sub_manager">Sub Manager</option>
+                {user?.role === 'owner' && (
+                  <>
+                    <option value="owner">Owner</option>
+                    <option value="manager">Manager</option>
+                    <option value="sub_manager">Sub Manager</option>
+                  </>
+                )}
+                {user?.role === 'manager' && (
+                  <option value="sub_manager">Sub Manager</option>
+                )}
                 <option value="telecaller">Telecaller</option>
                 <option value="field_staff">Field Staff</option>
                 <option value="staff">Staff</option>
@@ -652,9 +662,13 @@ const TeamPage = () => {
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">Select Branch...</option>
-                {branchesData?.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
+                {user?.role === 'owner' ? (
+                  branchesData?.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))
+                ) : (
+                  <option value={user?.branch}>{user?.branch_name || 'My Branch'}</option>
+                )}
               </select>
               {createForm.formState.errors.branch && <p className="text-sm text-destructive">{createForm.formState.errors.branch.message}</p>}
             </div>
