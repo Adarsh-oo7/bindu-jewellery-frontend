@@ -165,6 +165,13 @@ const IntegrationCard = ({ integration, days = 7, refetch, onConnect }) => {
         </div>
       </div>
 
+      {/* Sync Error Message */}
+      {integration.sync_status === 'error' && integration.sync_error && (
+        <div className="mx-5 mb-3 p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-600 font-medium">
+          ⚠️ {integration.sync_error}
+        </div>
+      )}
+
       {/* Analytics Grid */}
       {integration.is_connected && (
         <div className="px-5 pb-5 grid grid-cols-2 gap-3 relative">
