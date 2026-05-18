@@ -58,7 +58,7 @@ const IntegrationCard = ({ integration, days = 7, refetch, onConnect }) => {
 
   const syncMutation = useMutation({
     mutationFn: () => api.post(`/campaigns/integrations/${integration.id}/sync/`),
-    onSuccess: () => refetch(),
+    onSettled: () => refetch(),
   });
 
   const disconnectMutation = useMutation({
