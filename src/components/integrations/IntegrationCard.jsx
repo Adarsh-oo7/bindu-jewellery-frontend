@@ -71,6 +71,34 @@ const IntegrationCard = ({ integration, days = 7, refetch, onConnect }) => {
     onSuccess: () => refetch(),
   });
 
+  // Fetch available properties for Google Analytics property selector
+  const { data: properties } = useQuery({
+    queryKey: ['integration-properties', integration.id],
+    queryFn: () => api.get(`/campaigns/integrations/${integration.id}/properties/`).then(res => res.data),
+    enabled: integration.is_connected && integration.platform === 'google_analytics',
+  });
+
+  const selectPropertyMutation = useMutation({
+    mutationFn: ({ property_id, property_name }) => 
+      api.post(`/campaigns/integrations/${integration.id}/select-property/`, { property_id, property_name }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['integrations']);
+      queryClient.invalidateQueries(['integration-analytics', integration.id]);
+      if (refetch) refetch();
+    }
+  });
+
+  const handlePropertyChange = (e) => {
+    const selectedId = e.target.value;
+    const selectedProp = properties?.find(p => p.id === selectedId);
+    if (selectedProp) {
+      selectPropertyMutation.mutate({
+        property_id: selectedProp.id,
+        property_name: selectedProp.name
+      });
+    }
+  };
+
   const handleSync = (e) => {
     e.stopPropagation();
     syncMutation.mutate();
@@ -103,12 +131,30 @@ const IntegrationCard = ({ integration, days = 7, refetch, onConnect }) => {
             </div>
             <div>
               <h3 className="font-bold text-lg text-gray-900 leading-tight">{integration.platform_name}</h3>
-              <div className="flex items-center gap-2 mt-1">
+              <div className="flex flex-col gap-1 mt-1">
                 {integration.is_connected ? (
-                  <span className="flex items-center gap-1 text-sm font-medium text-green-600">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    {integration.account_name || 'Connected'}
-                  </span>
+                  <>
+                    <span className="flex items-center gap-1 text-sm font-medium text-green-600">
+                      <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                      Active Property:
+                    </span>
+                    {integration.platform === 'google_analytics' && properties && properties.length > 0 ? (
+                      <select
+                        value={integration.account_id}
+                        onChange={handlePropertyChange}
+                        disabled={selectPropertyMutation.isPending}
+                        className="text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary mt-1 max-w-[180px]"
+                      >
+                        {properties.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-xs font-bold text-gray-700 ml-2.5">
+                        {integration.account_name || 'Connected'}
+                      </span>
+                    )}
+                  </>
                 ) : (
                   <span className="text-sm font-medium text-gray-400">Disconnected</span>
                 )}
