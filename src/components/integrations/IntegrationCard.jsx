@@ -61,6 +61,12 @@ const IntegrationCard = ({ integration, days = 7, refetch, onConnect }) => {
     onSettled: () => refetch(),
   });
 
+  const { data: latestPosts, isLoading: postsLoading } = useQuery({
+    queryKey: ['integration-posts', integration.id],
+    queryFn: () => api.get(`/campaigns/integrations/${integration.id}/latest-posts/`).then(res => res.data),
+    enabled: integration.is_connected && (integration.platform === 'facebook_ads' || integration.platform === 'instagram_insights') && isExpanded,
+  });
+
   const disconnectMutation = useMutation({
     mutationFn: () => api.post(`/campaigns/integrations/${integration.id}/disconnect/`),
     onSuccess: () => refetch(),
@@ -182,6 +188,55 @@ const IntegrationCard = ({ integration, days = 7, refetch, onConnect }) => {
         </div>
       )}
 
+      {/* Latest Posts Feed (Facebook / Instagram) */}
+      {integration.is_connected && isExpanded && (
+        <div className="px-5 pb-5 border-t border-gray-100/80 pt-4 space-y-3">
+          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 flex items-center justify-between">
+            <span>Latest Feed / Posts</span>
+            {postsLoading && <Loader2 size={12} className="animate-spin text-gray-400" />}
+          </h4>
+          
+          {latestPosts && latestPosts.length > 0 ? (
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {latestPosts.map((post) => (
+                <div key={post.id} className="bg-gray-50/50 hover:bg-gray-50 p-3 rounded-xl border border-gray-100 transition-all flex gap-3">
+                  {post.media_url && (
+                    <img 
+                      src={post.media_url} 
+                      alt="Post" 
+                      className="w-12 h-12 object-cover rounded-lg border border-gray-200/50 flex-shrink-0" 
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-700 font-medium line-clamp-2 leading-relaxed">
+                      {post.caption}
+                    </p>
+                    <div className="flex items-center gap-3 mt-1.5 text-[10px] font-bold text-gray-400">
+                      <span className="flex items-center gap-1">
+                        ❤️ {post.likes} Likes
+                      </span>
+                      <span className="flex items-center gap-1">
+                        💬 {post.comments} Comments
+                      </span>
+                      {post.shares !== undefined && (
+                        <span className="flex items-center gap-1">
+                          🔄 {post.shares} Shares
+                        </span>
+                      )}
+                      <span className="ml-auto text-gray-400">
+                        {new Date(post.created_time).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : !postsLoading ? (
+            <p className="text-xs text-gray-400 text-center py-4">No recent posts found.</p>
+          ) : null}
+        </div>
+      )}
+
       {/* Footer Actions */}
       <div className="px-5 py-4 bg-gray-50/80 backdrop-blur-md border-t border-gray-100 flex items-center justify-between">
         <div className="flex gap-2">
@@ -197,6 +252,17 @@ const IntegrationCard = ({ integration, days = 7, refetch, onConnect }) => {
                 {syncMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} className="mr-1.5" />}
                 Sync
               </Button>
+              {(integration.platform === 'facebook_ads' || integration.platform === 'instagram_insights') && (
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="rounded-xl h-9 px-3 text-gray-500 hover:bg-gray-100 font-semibold text-xs gap-1"
+                >
+                  {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  {isExpanded ? 'Hide Feed' : 'Show Feed'}
+                </Button>
+              )}
               <Button 
                 size="sm" 
                 variant="ghost" 
