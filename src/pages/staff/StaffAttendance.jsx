@@ -11,12 +11,74 @@ import { format, differenceInSeconds } from 'date-fns';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import useAuth from '@/hooks/useAuth';
+import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import icon from 'leaflet/dist/images/marker-icon.png';
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
+import iconRetina from 'leaflet/dist/images/marker-icon-2x.png';
+
+let DefaultIcon = L.icon({
+    iconUrl: icon,
+    shadowUrl: iconShadow,
+    iconRetinaUrl: iconRetina,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+});
+L.Marker.prototype.options.icon = DefaultIcon;
 
 const StaffAttendance = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [now, setNow] = useState(new Date());
   const [breakSeconds, setBreakSeconds] = useState(0);
+  const [currentLocation, setCurrentLocation] = useState(null);
+
+  // Fetch user's assigned branch details for geofencing
+  const { data: myBranch } = useQuery({
+    queryKey: ['my-branch', user?.branch],
+    queryFn: () => api.get('/attendance/branch-location/').then(res => res.data),
+    enabled: !!user?.branch
+  });
+
+  // Active watch of current user location ONLY when actively viewing this page
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        setCurrentLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy
+        });
+      },
+      (err) => console.warn('GPS error:', err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  const getDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const R = 6371000; // radius of earth in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return Math.round(R * c);
+  };
+
+  const distance = myBranch?.lat && myBranch?.lng && currentLocation?.lat && currentLocation?.lng
+    ? getDistance(myBranch.lat, myBranch.lng, currentLocation.lat, currentLocation.lng)
+    : null;
+
+  const isWithinGeofence = distance !== null && distance <= 100;
 
   // Real-time clock
   useEffect(() => {
@@ -300,6 +362,88 @@ const StaffAttendance = () => {
               </div>
             )}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Geofence Map Section */}
+      <Card className="bg-white border-none shadow-xl overflow-hidden mt-6">
+        <CardHeader className="pb-3 border-b border-gray-50 bg-gray-50/30">
+          <CardTitle className="text-sm font-bold flex items-center justify-between">
+            <div className="flex items-center gap-2 text-gray-700">
+              <MapPin size={18} className="text-[#C9972A]" /> 
+              GPS Geofence Radar
+            </div>
+            {distance !== null ? (
+              <span className={cn(
+                "text-[10px] px-2 py-0.5 rounded-full font-bold",
+                isWithinGeofence ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+              )}>
+                {isWithinGeofence ? 'WITHIN GEOFENCE RANGE (AUTO-APPROVED)' : `OUTSIDE GEOFENCE (${distance}m)`}
+              </span>
+            ) : (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-bold">
+                CALIBRATING GPS SIGNAL...
+              </span>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="h-[300px] w-full relative">
+            {myBranch?.lat && myBranch?.lng ? (
+              <MapContainer center={[myBranch.lat, myBranch.lng]} zoom={17} style={{ height: '100%', width: '100%', zIndex: 0 }}>
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                
+                {/* Branch Pin */}
+                <Marker position={[myBranch.lat, myBranch.lng]}>
+                  <Popup>
+                    <div className="text-xs">
+                      <p className="font-bold text-gray-900">{myBranch.branch_name || 'My Branch'}</p>
+                      <p className="text-gray-500">{myBranch.branch_address || 'Branch Address'}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+
+                {/* 100m Geofence circle */}
+                <Circle 
+                  center={[myBranch.lat, myBranch.lng]} 
+                  radius={100} 
+                  pathOptions={{ fillColor: '#C9972A', color: '#C9972A', fillOpacity: 0.1, weight: 2 }} 
+                />
+
+                {/* User location pin */}
+                {currentLocation?.lat && currentLocation?.lng && (
+                  <Marker position={[currentLocation.lat, currentLocation.lng]} icon={L.divIcon({
+                    className: 'user-location-icon',
+                    html: `<div style="background-color: #3B82F6; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.3);"></div>`
+                  })}>
+                    <Popup>My Current Location (±{Math.round(currentLocation.accuracy)}m)</Popup>
+                  </Marker>
+                )}
+              </MapContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full bg-gray-50 text-gray-400 text-sm flex-col gap-2 p-4 text-center">
+                <MapPin size={24} className="animate-bounce" />
+                {user?.branch ? 'Loading branch location...' : 'No branch assigned to your profile.'}
+              </div>
+            )}
+          </div>
+          
+          {myBranch && (
+            <div className="p-4 bg-gray-50 border-t border-gray-100 grid grid-cols-2 gap-4 text-[11px]">
+              <div className="flex flex-col">
+                <span className="text-gray-400 font-bold uppercase tracking-tighter">Branch Target</span>
+                <span className="text-gray-700 font-medium">
+                  {myBranch.branch_name}
+                </span>
+              </div>
+              <div className="flex flex-col text-right">
+                <span className="text-gray-400 font-bold uppercase tracking-tighter">My Current Distance</span>
+                <span className={cn("font-bold text-sm", isWithinGeofence ? "text-green-600" : "text-amber-600")}>
+                  {distance !== null ? `${distance} meters` : 'Scanning GPS...'}
+                </span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
