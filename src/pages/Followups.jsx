@@ -48,6 +48,8 @@ const Followups = () => {
   const isAdmin = isOwner || isManager;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const isStaffView = window.location.pathname.startsWith('/staff');
+  const pathPrefix = isStaffView ? '/staff/leads' : '/leads';
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('pending');
   const [assignmentFilter, setAssignmentFilter] = useState('unassigned');
@@ -264,7 +266,7 @@ const Followups = () => {
                     variant="ghost" 
                     size="icon" 
                     className="h-8 w-8 text-muted-foreground"
-                    onClick={() => navigate(`/leads/${followup.lead}`)}
+                    onClick={() => navigate(`${pathPrefix}/${followup.lead}`)}
                   >
                     <ExternalLink size={14} />
                   </Button>
