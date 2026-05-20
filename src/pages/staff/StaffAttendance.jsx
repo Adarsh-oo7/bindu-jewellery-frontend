@@ -10,7 +10,6 @@ import {
 import { format, differenceInSeconds } from 'date-fns';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
-import LocationMap from '@/components/maps/LocationMap';
 import useAuth from '@/hooks/useAuth';
 
 const StaffAttendance = () => {
@@ -18,7 +17,6 @@ const StaffAttendance = () => {
   const { user } = useAuth();
   const [now, setNow] = useState(new Date());
   const [breakSeconds, setBreakSeconds] = useState(0);
-  const [currentLocation, setCurrentLocation] = useState(null);
 
   // Real-time clock
   useEffect(() => {
@@ -38,36 +36,7 @@ const StaffAttendance = () => {
   const isCheckedOut = !!attendance?.check_out_time;
   const isOnBreak = !!attendance?.on_break;
 
-  // Track live location only during active shift
-  useEffect(() => {
-    if (!navigator.geolocation || !isCheckedIn) {
-      setCurrentLocation(null);
-      return;
-    }
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        setCurrentLocation({
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          timestamp: pos.timestamp,
-          name: 'Your Current Location',
-          type: 'staff',
-          is_active: true,
-          isHighAccuracy: pos.coords.accuracy < 20
-        });
-      },
-      (err) => console.error('Map tracking error:', err),
-      { 
-        enableHighAccuracy: true, 
-        timeout: 15000,
-        maximumAge: 0 
-      }
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, [isCheckedIn]);
 
   // Calculate active break duration
   useEffect(() => {
@@ -333,89 +302,7 @@ const StaffAttendance = () => {
           </div>
         </CardContent>
       </Card>
-      {/* Live Map Section */}
-      <Card className="bg-white border-none shadow-xl overflow-hidden">
-        <CardHeader className="pb-3 border-b border-gray-50 bg-gray-50/30">
-          <CardTitle className="text-sm font-bold flex items-center justify-between">
-            <div className="flex items-center gap-2 text-gray-700">
-              <MapPin size={18} className="text-red-500" /> 
-              Live Location Map
-            </div>
-            {currentLocation && (
-              <div className="flex items-center gap-2">
-                <span className={cn(
-                  "text-[10px] px-2 py-0.5 rounded-full font-bold",
-                  currentLocation.accuracy < 20 ? "bg-green-100 text-green-700" :
-                  currentLocation.accuracy < 50 ? "bg-amber-100 text-amber-700" :
-                  "bg-red-100 text-red-700"
-                )}>
-                  {currentLocation.accuracy < 20 ? 'EXCELLENT SIGNAL' : 
-                   currentLocation.accuracy < 50 ? 'GOOD SIGNAL' : 
-                   'WEAK SIGNAL - MOVE OUTSIDE'}
-                </span>
-                <span className="flex h-2 w-2 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                </span>
-              </div>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="relative">
-            <LocationMap 
-              height="350px"
-              zoom={15}
-              center={currentLocation ? [currentLocation.latitude, currentLocation.longitude] : [12.9716, 77.5946]}
-              markers={currentLocation ? [currentLocation] : []}
-              showLiveTracking={true}
-            />
-            {!currentLocation && (
-              <div className="absolute inset-0 bg-gray-900/5 backdrop-blur-[2px] flex items-center justify-center z-[1000]">
-                <div className="bg-white p-6 rounded-2xl shadow-xl text-center max-w-xs border border-gray-100">
-                  {isCheckedOut ? (
-                    <>
-                      <div className="mb-3 mx-auto h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
-                        <MapPin size={24} />
-                      </div>
-                      <p className="text-sm font-bold text-gray-800">Tracking Inactive</p>
-                      <p className="text-xs text-gray-500 mt-1">Live tracking stopped after punch-out.</p>
-                    </>
-                  ) : !isCheckedIn ? (
-                    <>
-                      <div className="mb-3 mx-auto h-12 w-12 bg-gray-100 rounded-full flex items-center justify-center text-gray-400">
-                        <Clock size={24} />
-                      </div>
-                      <p className="text-sm font-bold text-gray-800">Ready to Track</p>
-                      <p className="text-xs text-gray-500 mt-1">Tracking will start once you punch in.</p>
-                    </>
-                  ) : (
-                    <>
-                      <div className="animate-spin mb-3 mx-auto h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
-                      <p className="text-sm font-bold text-gray-800">Acquiring GPS Signal...</p>
-                      <p className="text-xs text-gray-500 mt-1">Ensuring maximum accuracy for your shift.</p>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          <div className="p-4 bg-gray-50 border-t border-gray-100 grid grid-cols-2 gap-4 text-[11px]">
-            <div className="flex flex-col">
-              <span className="text-gray-400 font-bold uppercase tracking-tighter">Current Lat/Lng</span>
-              <span className="text-gray-700 font-mono">
-                {currentLocation ? `${currentLocation.latitude.toFixed(6)}, ${currentLocation.longitude.toFixed(6)}` : 'Scanning...'}
-              </span>
-            </div>
-            <div className="flex flex-col text-right">
-              <span className="text-gray-400 font-bold uppercase tracking-tighter">GPS Accuracy</span>
-              <span className="text-gray-700">
-                {currentLocation ? `±${Math.round(currentLocation.accuracy)} meters` : 'Calibrating...'}
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   );
 };
