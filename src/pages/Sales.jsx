@@ -264,28 +264,42 @@ const SalesPage = () => {
                       setValue('phone', val); // Sync with react-hook-form
                       setPhoneNumber(val);
                       if (val.length >= 10) {
-                        const exact = leadsData?.find(l => l.phone.includes(val));
-                        setMatchedLead(exact || null);
+                        const exact = leadsData?.find(l => l.phone.includes(val) || val.includes(l.phone));
+                        if (exact) {
+                          setMatchedLead(exact);
+                          setValue('customer_name', exact.name); // Autofill name!
+                        } else {
+                          setMatchedLead(null);
+                          setValue('customer_name', ''); // Clear if new customer
+                        }
                       } else {
                         setMatchedLead(null);
+                        setValue('customer_name', '');
                       }
                     }}
                   />
                   {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
                   
-                  {matchedLead && (
-                    <p className="text-sm text-green-600 font-medium mt-1">
-                      ✓ Found Customer: {matchedLead.name}
-                    </p>
-                  )}
-                  
-                  {!matchedLead && phoneNumber.length >= 10 && (
-                    <div className="mt-3 space-y-2 border-l-2 border-primary pl-3">
-                      <Label htmlFor="customer_name" className="text-primary">New Customer Name</Label>
+                  {phoneNumber.length >= 10 && (
+                    <div className="mt-3 space-y-2 border-l-2 border-primary pl-3 animate-in fade-in duration-300">
+                      <Label htmlFor="customer_name" className="text-primary flex items-center justify-between">
+                        <span>Customer Name</span>
+                        {matchedLead ? (
+                          <span className="text-[11px] text-green-600 font-bold flex items-center gap-1">
+                            ✓ Existing Customer
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-[#C9972A] font-bold">
+                            New Customer profile will be created
+                          </span>
+                        )}
+                      </Label>
                       <Input 
                         id="customer_name" 
-                        placeholder="Enter customer name" 
+                        placeholder={matchedLead ? matchedLead.name : "Enter customer name"} 
                         {...register('customer_name')}
+                        readOnly={!!matchedLead}
+                        className={matchedLead ? "bg-green-50/50 border-green-200 text-green-800 font-medium focus-visible:ring-green-500 cursor-not-allowed" : ""}
                       />
                       {errors.customer_name && <p className="text-sm text-destructive">{errors.customer_name.message}</p>}
                     </div>
