@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import api from '../api/axios';
 import {
-  Phone, MessageCircle, Bell, StickyNote, Send, X, Check, ChevronDown, Flame
+  Phone, MessageCircle, Bell, StickyNote, Send, X, Check, ChevronDown, Flame, MapPin, Navigation
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const WHATSAPP_TEMPLATES = [
   { label: 'Follow-up', text: (name) => `Hi ${name}! 😊 Following up on your visit to Bindu Jewellery. Would you like to come in and take a look at our latest collection?` },
@@ -17,14 +18,38 @@ export default function CustomerQuickActions({ customer }) {
   const phone = customer?.phone?.replace(/[^0-9]/g, '') || '';
   const leadId = customer?.leads?.[0]?.id;
 
-  const [panel, setPanel] = useState(null); // 'reminder' | 'note' | 'whatsapp'
+  const [panel, setPanel] = useState(null); // 'reminder' | 'note' | 'whatsapp' | 'visit'
   const [reminder, setReminder] = useState({ date: '', note: '', type: 'call' });
   const [note, setNote] = useState('');
   const [waTemplate, setWaTemplate] = useState(0);
   const [waCustom, setWaCustom] = useState('');
   const [success, setSuccess] = useState('');
+  const [visitForm, setVisitForm] = useState({ staff: '', scheduled_date: '', notes: '' });
+
+  const userStr = localStorage.getItem('user');
+  const currentUser = userStr ? JSON.parse(userStr) : null;
+  const canManage = currentUser?.role === 'owner' || currentUser?.role === 'manager' || currentUser?.role === 'admin' || currentUser?.role === 'sub_manager';
 
   const flash = (msg) => { setSuccess(msg); setTimeout(() => setSuccess(''), 2500); };
+
+  // Fetch field staff for visit assignment
+  const { data: staffData } = useQuery({
+    queryKey: ['field-staff'],
+    queryFn: () => api.get('/accounts/staff/').then(r => (r.data.results || r.data).filter(s => s.role === 'field_staff' || s.role === 'staff')),
+    enabled: panel === 'visit',
+  });
+
+  // Assign field visit mutation
+  const visitMutation = useMutation({
+    mutationFn: (d) => api.post('/field-visits/field-visits/', d),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['fieldvisits']);
+      setVisitForm({ staff: '', scheduled_date: '', notes: '' });
+      setPanel(null);
+      toast.success('Field visit assigned successfully!');
+    },
+    onError: (err) => toast.error(err.response?.data?.detail || 'Failed to assign visit'),
+  });
 
   // Add reminder follow-up
   const reminderMutation = useMutation({
@@ -112,6 +137,19 @@ export default function CustomerQuickActions({ customer }) {
           </div>
           <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 group-hover:text-purple-600 transition-colors">Note</span>
         </button>
+
+        {/* Assign Field Visit (managers only) */}
+        {canManage && (
+          <button
+            onClick={() => toggle('visit')}
+            className={`flex-1 flex flex-col items-center justify-center gap-2 py-5 transition-all duration-300 group min-w-[80px] ${panel === 'visit' ? 'bg-indigo-50/80' : 'hover:bg-indigo-50/80'}`}
+          >
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-lg group-hover:shadow-indigo-500/30 ${panel === 'visit' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 -translate-y-1' : 'bg-indigo-100/50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white'}`}>
+              <Navigation size={20} />
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 group-hover:text-indigo-600 transition-colors">Field Visit</span>
+          </button>
+        )}
 
         {/* Quick Interested */}
         <button
@@ -286,6 +324,78 @@ export default function CustomerQuickActions({ customer }) {
             >
               <Send size={14} />
               {noteMutation.isPending ? 'Saving...' : 'Save Note'}
+            </button>
+          </div>
+        </div>
+      )}
+      {/* Field Visit Assignment Panel */}
+      {panel === 'visit' && (
+        <div className="border-t border-gray-100 p-5 bg-indigo-50/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-bold text-gray-700 flex items-center gap-2">
+              <Navigation size={14} className="text-indigo-500" /> Assign Field Visit
+            </p>
+            {!leadId && <span className="text-xs text-red-400 font-medium">No lead linked</span>}
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">Assign To (Field Staff)</label>
+              <select
+                value={visitForm.staff}
+                onChange={e => setVisitForm(v => ({ ...v, staff: e.target.value }))}
+                className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                <option value="">Choose field staff...</option>
+                {staffData?.map(s => (
+                  <option key={s.id} value={s.id}>{s.full_name} ({s.branch_name || 'No branch'})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">Scheduled Date &amp; Time (Optional)</label>
+              <input
+                type="datetime-local"
+                value={visitForm.scheduled_date}
+                onChange={e => setVisitForm(v => ({ ...v, scheduled_date: e.target.value }))}
+                className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                min={new Date().toISOString().slice(0, 16)}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 font-semibold uppercase block mb-1">Instructions (Optional)</label>
+              <input
+                type="text"
+                value={visitForm.notes}
+                onChange={e => setVisitForm(v => ({ ...v, notes: e.target.value }))}
+                placeholder="e.g. Visit regarding bridal inquiry..."
+                className="w-full text-sm rounded-xl border border-gray-200 px-3 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => setPanel(null)}
+              className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                if (!visitForm.staff || !leadId) {
+                  toast.error(!leadId ? 'No lead linked to this customer' : 'Please select a field staff member');
+                  return;
+                }
+                const payload = { lead: leadId, staff: visitForm.staff, notes: visitForm.notes };
+                if (visitForm.scheduled_date) payload.scheduled_date = visitForm.scheduled_date;
+                visitMutation.mutate(payload);
+              }}
+              disabled={!visitForm.staff || !leadId || visitMutation.isPending}
+              className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Navigation size={14} />
+              {visitMutation.isPending ? 'Assigning...' : 'Assign Visit'}
             </button>
           </div>
         </div>

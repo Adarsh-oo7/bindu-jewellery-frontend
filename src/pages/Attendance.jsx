@@ -41,6 +41,23 @@ const FitMapToBounds = ({ data }) => {
   return null;
 };
 
+const ChangeMapCenter = ({ branchLat, branchLng, userLat, userLng }) => {
+  const map = useMap();
+  useEffect(() => {
+    const points = [];
+    if (branchLat && branchLng) points.push([branchLat, branchLng]);
+    if (userLat && userLng) points.push([userLat, userLng]);
+    
+    if (points.length === 2) {
+      const bounds = L.latLngBounds(points);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    } else if (points.length === 1) {
+      map.setView(points[0], 17);
+    }
+  }, [branchLat, branchLng, userLat, userLng, map]);
+  return null;
+};
+
 const safeFormat = (dateStr, formatStr, fallback = '—') => {
   if (!dateStr) return fallback;
   try {
@@ -400,6 +417,7 @@ const AttendancePage = () => {
                 {myBranch?.lat && myBranch?.lng ? (
                   <MapContainer center={[myBranch.lat, myBranch.lng]} zoom={17} style={{ height: '100%', width: '100%' }}>
                     <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <ChangeMapCenter branchLat={myBranch.lat} branchLng={myBranch.lng} userLat={currentLocation?.lat} userLng={currentLocation?.lng} />
                     <Marker position={[myBranch.lat, myBranch.lng]}>
                       <Popup>Branch Location</Popup>
                     </Marker>

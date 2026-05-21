@@ -6,7 +6,7 @@ import {
   User, Phone, MapPin, Calendar, Clock, Mail, Activity, UserCheck,
   ShoppingBag, TrendingUp, MessageSquare, Star, Tag, ChevronDown,
   ChevronUp, Flame, CheckCircle2, AlertCircle, Gift, Edit2,
-  Home, Map, Globe, StickyNote, Briefcase, FileText
+  Home, Map, Globe, StickyNote, Briefcase, FileText, Save, X
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
@@ -15,6 +15,7 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { format, formatDistanceToNow } from 'date-fns';
 import { formatGrams } from '../lib/utils';
+import toast from 'react-hot-toast';
 
 // ── Helpers & Constants ───────────────────────────────────────────────────────
 const STAGE_META = {
@@ -145,6 +146,219 @@ const LeadDetail = ({ lead }) => {
         </div>
       )}
     </div>
+  );
+};
+
+// ── Profile Attributes Tab (Editable) ────────────────────────────────────────
+
+const ATTR_FIELDS = [
+  { label: 'House / Building', key: 'house_name', icon: Home, placeholder: 'e.g. Sunshine Villa' },
+  { label: "Father's Name",    key: 'father_name', icon: User, placeholder: 'e.g. Rajan K.' },
+  { label: 'Village / Town',   key: 'village',     icon: Globe, placeholder: 'e.g. Sullia' },
+  { label: 'District',         key: 'district',    icon: MapPin, placeholder: 'e.g. Dakshina Kannada' },
+  { label: 'Panchayath',       key: 'panchayath',  icon: Map, placeholder: 'e.g. Sullia Gram Panchayath' },
+  { label: 'Alternate Phone',  key: 'mobile2',     icon: Phone, placeholder: 'e.g. 9876543210' },
+];
+
+const ProfileAttributesTab = ({ customer, customerId }) => {
+  const queryClient = useQueryClient();
+  const [editingKey, setEditingKey] = useState(null);
+  const [draftValue, setDraftValue] = useState('');
+
+  const patchMutation = useMutation({
+    mutationFn: (data) => api.patch(`/leads/customers/${customerId}/`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['customer', customerId]);
+      setEditingKey(null);
+      toast.success('Profile updated!');
+    },
+    onError: (err) => toast.error('Failed to save: ' + (err.response?.data?.detail || err.message)),
+  });
+
+  const startEdit = (field) => {
+    setEditingKey(field.key);
+    setDraftValue(customer[field.key] || '');
+  };
+
+  const cancelEdit = () => { setEditingKey(null); setDraftValue(''); };
+
+  const saveEdit = () => {
+    if (!editingKey) return;
+    patchMutation.mutate({ [editingKey]: draftValue });
+  };
+
+  return (
+    <div className="animate-in fade-in duration-300">
+      <div className="flex items-center justify-between mb-6">
+        <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+          <Home size={18} className="text-[#C9972A]" /> Profile Attributes &amp; Legacy Data
+        </h3>
+        <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">
+          Click ✏ to edit any field
+        </span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {ATTR_FIELDS.map((field) => {
+          const IconCmp = field.icon;
+          const isEditing = editingKey === field.key;
+          const currentVal = customer[field.key];
+
+          return (
+            <div
+              key={field.key}
+              className={`rounded-2xl border transition-all duration-200 overflow-hidden ${
+                isEditing
+                  ? 'border-[#C9972A]/50 bg-amber-50/30 shadow-md shadow-[#C9972A]/10'
+                  : 'border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-sm hover:border-gray-200'
+              }`}
+            >
+              {/* Display row */}
+              <div className="flex items-center gap-3 p-4">
+                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-gray-400 border border-gray-100 shadow-sm shrink-0">
+                  <IconCmp size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{field.label}</p>
+                  {!isEditing ? (
+                    <p className={`text-sm font-semibold truncate ${currentVal ? 'text-gray-900' : 'text-gray-300 italic'}`}>
+                      {currentVal || 'Not set'}
+                    </p>
+                  ) : (
+                    <input
+                      autoFocus
+                      type={field.key === 'mobile2' ? 'tel' : 'text'}
+                      value={draftValue}
+                      onChange={e => setDraftValue(e.target.value)}
+                      placeholder={field.placeholder}
+                      onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
+                      className="w-full text-sm font-semibold text-gray-900 bg-transparent border-b border-[#C9972A]/60 focus:outline-none focus:border-[#C9972A] py-0.5"
+                    />
+                  )}
+                </div>
+
+                {/* Action buttons */}
+                {!isEditing ? (
+                  <button
+                    onClick={() => startEdit(field)}
+                    title="Edit"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-300 hover:text-[#C9972A] hover:bg-amber-50 transition-all shrink-0"
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                ) : (
+                  <div className="flex gap-1 shrink-0">
+                    <button
+                      onClick={saveEdit}
+                      disabled={patchMutation.isPending}
+                      title="Save"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center bg-[#C9972A] text-white hover:bg-amber-700 transition-all disabled:opacity-50"
+                    >
+                      <Save size={13} />
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      title="Cancel"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bulk edit section for convenience */}
+      <BulkAddressEdit customer={customer} customerId={customerId} />
+    </div>
+  );
+};
+
+const BulkAddressEdit = ({ customer, customerId }) => {
+  const queryClient = useQueryClient();
+  const [isOpen, setIsOpen] = useState(false);
+  const [form, setForm] = useState({
+    house_name: '', father_name: '', village: '',
+    district: '', panchayath: '', mobile2: ''
+  });
+
+  const patchMutation = useMutation({
+    mutationFn: (data) => api.patch(`/leads/customers/${customerId}/`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['customer', customerId]);
+      setIsOpen(false);
+      toast.success('Address details saved!');
+    },
+    onError: (err) => toast.error('Save failed: ' + (err.response?.data?.detail || err.message)),
+  });
+
+  const openBulk = () => {
+    setForm({
+      house_name: customer.house_name || '',
+      father_name: customer.father_name || '',
+      village: customer.village || '',
+      district: customer.district || '',
+      panchayath: customer.panchayath || '',
+      mobile2: customer.mobile2 || '',
+    });
+    setIsOpen(true);
+  };
+
+  return (
+    <>
+      <div className="mt-6 flex justify-center">
+        <button
+          onClick={openBulk}
+          className="flex items-center gap-2 text-xs font-bold text-[#C9972A] hover:text-amber-700 transition-colors py-2 px-4 rounded-xl border border-[#C9972A]/30 hover:border-[#C9972A]/60 hover:bg-amber-50/50"
+        >
+          <Edit2 size={12} /> Edit All Address Fields at Once
+        </button>
+      </div>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent className="max-w-lg rounded-3xl p-0 overflow-hidden border-0 shadow-2xl">
+          <div className="bg-white p-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                <Home size={18} className="text-[#C9972A]" /> Edit Address &amp; Legacy Data
+              </DialogTitle>
+            </DialogHeader>
+            <form
+              onSubmit={e => { e.preventDefault(); patchMutation.mutate(form); }}
+              className="space-y-4 mt-5"
+            >
+              {ATTR_FIELDS.map(f => {
+                const IconCmp = f.icon;
+                return (
+                  <div key={f.key} className="space-y-1.5">
+                    <Label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <IconCmp size={11} /> {f.label}
+                    </Label>
+                    <Input
+                      type={f.key === 'mobile2' ? 'tel' : 'text'}
+                      value={form[f.key]}
+                      onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                      placeholder={f.placeholder}
+                      className="rounded-xl h-10 bg-gray-50 border-gray-200 focus:border-[#C9972A]/50"
+                    />
+                  </div>
+                );
+              })}
+              <div className="flex gap-3 pt-4 border-t border-gray-100 mt-6">
+                <Button type="button" variant="outline" onClick={() => setIsOpen(false)} className="flex-1 rounded-xl h-11">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={patchMutation.isPending} className="flex-1 rounded-xl h-11 bg-gray-900 hover:bg-black text-white">
+                  {patchMutation.isPending ? 'Saving...' : 'Save All Fields'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
@@ -457,32 +671,8 @@ const CustomerProfileDetail = ({ customerId }) => {
 
           {/* TAB: DETAILS */}
           {activeTab === 'details' && (
-            <div className="animate-in fade-in duration-300">
-              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2 mb-6">
-                <Home size={18} className="text-[#C9972A]" /> Profile Attributes & Legacy Data
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                {[
-                  { label: "House / Building", val: customer.house_name, icon: Home },
-                  { label: "Father's Name", val: customer.father_name, icon: User },
-                  { label: "Village / Town", val: customer.village, icon: Globe },
-                  { label: "District", val: customer.district, icon: MapPin },
-                  { label: "Panchayath", val: customer.panchayath, icon: Map },
-                  { label: "Alternate Phone", val: customer.mobile2, icon: Phone },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-4 p-4 rounded-2xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-sm transition-all">
-                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-gray-400 border border-gray-100 shadow-sm">
-                      <item.icon size={16} />
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-0.5">{item.label}</p>
-                      <p className="text-sm font-semibold text-gray-900">{item.val || '—'}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            <ProfileAttributesTab customer={customer} customerId={customerId} />)
+          }
 
         </div>
       </div>

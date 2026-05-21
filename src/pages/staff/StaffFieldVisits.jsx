@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MapPin, Navigation, Clock, CheckCircle, Navigation2, FileCheck, Phone, Map } from 'lucide-react';
+import { MapPin, Navigation, Clock, CheckCircle, Navigation2, FileCheck, Phone, Map, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -15,6 +15,10 @@ const StaffFieldVisits = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [locationError, setLocationError] = useState(null);
+  
+  // State for creating a new field visit by self
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [selectedLeadId, setSelectedLeadId] = useState('');
 
   // Fetch only this staff's field visits
   const { data: visitsData, isLoading } = useQuery({
@@ -22,10 +26,42 @@ const StaffFieldVisits = () => {
     queryFn: () => api.get(`/field-visits/field-visits/?staff=${user?.id}`).then(res => res.data.results || res.data)
   });
 
+  // Fetch only this staff's assigned leads to select for self visit
+  const { data: leadsData } = useQuery({
+    queryKey: ['staff-leads'],
+    queryFn: () => api.get('/leads/leads/').then(res => res.data.results || res.data)
+  });
+
   const visits = visitsData || [];
-  const activeVisit = visits.find(v => v.status === 'active');
-  const scheduledVisits = visits.filter(v => v.status === 'scheduled');
+  // A visit is active (in progress) if status is 'active' AND start_lat is populated
+  const activeVisit = visits.find(v => v.status === 'active' && v.start_lat);
+  // A visit is scheduled/assigned if status is 'active' AND start_lat is null
+  const scheduledVisits = visits.filter(v => v.status === 'active' && !v.start_lat);
   const completedVisits = visits.filter(v => v.status === 'completed');
+
+  const createVisitMutation = useMutation({
+    mutationFn: (newVisit) => api.post('/field-visits/field-visits/', newVisit),
+    onSuccess: () => {
+      toast.success('Field visit created successfully!');
+      queryClient.invalidateQueries(['staff-fieldvisits']);
+      setIsCreateOpen(false);
+      setSelectedLeadId('');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to create field visit.');
+    }
+  });
+
+  const handleCreateSubmit = (e) => {
+    e.preventDefault();
+    if (!selectedLeadId) {
+      toast.error('Please select a lead.');
+      return;
+    }
+    createVisitMutation.mutate({
+      lead: selectedLeadId
+    });
+  };
 
   const getLocation = () => {
     return new Promise((resolve, reject) => {
@@ -93,9 +129,17 @@ const StaffFieldVisits = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Field Visits</h2>
-        <p className="text-sm text-gray-500">Manage your daily client visits</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Field Visits</h2>
+          <p className="text-sm text-gray-500">Manage your daily client visits</p>
+        </div>
+        <Button 
+          onClick={() => setIsCreateOpen(true)}
+          className="bg-[#0F6E56] hover:bg-[#0a5240] text-white gap-2"
+        >
+          <Plus size={16} /> New Visit
+        </Button>
       </div>
 
       {activeVisit && (
@@ -203,6 +247,48 @@ const StaffFieldVisits = () => {
           ))}
         </div>
       )}
+
+      {/* Dialog for starting new self-visit */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900">Start New Field Visit</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateSubmit} className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 block">Select Customer / Lead</label>
+              <select
+                value={selectedLeadId}
+                onChange={(e) => setSelectedLeadId(e.target.value)}
+                className="w-full flex h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56] focus:border-transparent text-gray-900"
+              >
+                <option value="">Choose a customer...</option>
+                {leadsData?.map(lead => (
+                  <option key={lead.id} value={lead.id}>
+                    {lead.name} ({lead.phone || 'No phone'})
+                  </option>
+                ))}
+              </select>
+              {leadsData?.length === 0 && (
+                <p className="text-xs text-amber-600">No leads assigned to you. You can only start visits for leads assigned to you.</p>
+              )}
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full bg-[#0F6E56] hover:bg-[#0a5240] text-white font-bold"
+              disabled={createVisitMutation.isPending || !selectedLeadId}
+            >
+              {createVisitMutation.isPending ? (
+                <Loader2 className="animate-spin mr-2" size={16} />
+              ) : (
+                <MapPin className="mr-2" size={16} />
+              )}
+              Create Visit
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

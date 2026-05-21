@@ -11,7 +11,7 @@ import { format, differenceInSeconds } from 'date-fns';
 import toast from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import useAuth from '@/hooks/useAuth';
-import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -27,6 +27,23 @@ let DefaultIcon = L.icon({
     popupAnchor: [1, -34],
 });
 L.Marker.prototype.options.icon = DefaultIcon;
+
+const ChangeMapCenter = ({ branchLat, branchLng, userLat, userLng }) => {
+  const map = useMap();
+  useEffect(() => {
+    const points = [];
+    if (branchLat && branchLng) points.push([branchLat, branchLng]);
+    if (userLat && userLng) points.push([userLat, userLng]);
+    
+    if (points.length === 2) {
+      const bounds = L.latLngBounds(points);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    } else if (points.length === 1) {
+      map.setView(points[0], 17);
+    }
+  }, [branchLat, branchLng, userLat, userLng, map]);
+  return null;
+};
 
 const StaffAttendance = () => {
   const queryClient = useQueryClient();
@@ -392,6 +409,7 @@ const StaffAttendance = () => {
             {myBranch?.lat && myBranch?.lng ? (
               <MapContainer center={[myBranch.lat, myBranch.lng]} zoom={17} style={{ height: '100%', width: '100%', zIndex: 0 }}>
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                <ChangeMapCenter branchLat={myBranch.lat} branchLng={myBranch.lng} userLat={currentLocation?.lat} userLng={currentLocation?.lng} />
                 
                 {/* Branch Pin */}
                 <Marker position={[myBranch.lat, myBranch.lng]}>

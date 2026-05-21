@@ -42,8 +42,10 @@ const FieldVisitsPage = () => {
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState('all');
+  const [selectedStaff, setSelectedStaff] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [assignForm, setAssignForm] = useState({ lead: '', staff: '', notes: '' });
+  const [assignForm, setAssignForm] = useState({ lead: '', staff: '', notes: '', scheduled_date: '' });
   const [userLocation, setUserLocation] = useState(null);
 
   // Fetch Branches
@@ -56,11 +58,13 @@ const FieldVisitsPage = () => {
   });
   
   const { data: visitsData, isLoading } = useQuery({
-    queryKey: ['fieldvisits', selectedBranch],
+    queryKey: ['fieldvisits', selectedBranch, selectedStaff, statusFilter],
     queryFn: () => {
       if (canManageVisits) {
         const params = new URLSearchParams();
         if (selectedBranch !== 'all') params.set('branch', selectedBranch);
+        if (selectedStaff !== 'all') params.set('staff', selectedStaff);
+        if (statusFilter !== 'all') params.set('status', statusFilter);
         const qs = params.toString();
         return api.get(`/field-visits/field-visits/${qs ? '?' + qs : ''}`).then(res => res.data.results || res.data);
       } else {
@@ -133,7 +137,7 @@ const FieldVisitsPage = () => {
       queryClient.invalidateQueries({ queryKey: ['fieldvisits'] });
       toast.success('Field visit assigned successfully!');
       setShowAssignModal(false);
-      setAssignForm({ lead: '', staff: '', notes: '' });
+      setAssignForm({ lead: '', staff: '', notes: '', scheduled_date: '' });
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Failed to assign visit');
@@ -146,7 +150,9 @@ const FieldVisitsPage = () => {
       toast.error('Please select both a lead and a staff member');
       return;
     }
-    createVisitMutation.mutate(assignForm);
+    const payload = { lead: assignForm.lead, staff: assignForm.staff, notes: assignForm.notes };
+    if (assignForm.scheduled_date) payload.scheduled_date = assignForm.scheduled_date;
+    createVisitMutation.mutate(payload);
   };
 
   useEffect(() => {
@@ -160,7 +166,7 @@ const FieldVisitsPage = () => {
           });
           
           // If there's an active visit, update live tracking
-          const activeVisit = filteredVisits.find(v => v.status === 'active' || v.status === 'in_progress');
+          const activeVisit = filteredVisits.find(v => v.status === 'active' && v.start_lat);
           if (activeVisit) {
             api.post('/field-visits/location-tracking/', {
               latitude: position.coords.latitude,
@@ -241,31 +247,58 @@ const FieldVisitsPage = () => {
         </h1>
         <div className="flex flex-wrap gap-2">
           {canManageVisits && (
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Branch Filter */}
+              <div className="flex items-center gap-1">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <select 
+                  value={selectedBranch}
+                  onChange={(e) => setSelectedBranch(e.target.value)}
+                  className="px-3 py-2 border rounded-md bg-background text-sm"
+                >
+                  <option value="all">All Branches</option>
+                  {branchesData?.map(branch => (
+                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Staff Filter */}
               <select 
-                value={selectedBranch}
-                onChange={(e) => setSelectedBranch(e.target.value)}
-                className="px-3 py-2 border rounded-md bg-background"
+                value={selectedStaff}
+                onChange={(e) => setSelectedStaff(e.target.value)}
+                className="px-3 py-2 border rounded-md bg-background text-sm"
               >
-                <option value="all">All Branches</option>
-                {branchesData?.map(branch => (
-                  <option key={branch.id} value={branch.id}>{branch.name}</option>
+                <option value="all">All Staff</option>
+                {staffData?.filter(s => s.role === 'field_staff' || s.role === 'staff').map(s => (
+                  <option key={s.id} value={s.id}>{s.full_name}</option>
                 ))}
+              </select>
+
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="px-3 py-2 border rounded-md bg-background text-sm"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Upcoming / Active</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
               </select>
             </div>
           )}
           <div className="flex gap-2">
             {canManageVisits ? (
               <Button className="bg-[#0F6E56] hover:bg-[#094d3c]" onClick={() => {
-                setAssignForm({ lead: '', staff: '', notes: '' });
+                setAssignForm({ lead: '', staff: '', notes: '', scheduled_date: '' });
                 setShowAssignModal(true);
               }}>
                 <Plus size={16} className="mr-2" /> Assign Visit
               </Button>
             ) : (
               <Button className="bg-[#0F6E56] hover:bg-[#094d3c]" onClick={() => {
-                setAssignForm({ lead: '', staff: user?.id, notes: '' });
+                setAssignForm({ lead: '', staff: user?.id, notes: '', scheduled_date: '' });
                 setShowAssignModal(true);
               }}>
                 <Plus size={16} className="mr-2" /> Start New Visit
@@ -302,7 +335,7 @@ const FieldVisitsPage = () => {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{filteredVisits.filter(v => v.status === 'in_progress').length}</div>
+              <div className="text-2xl font-bold">{filteredVisits.filter(v => v.status === 'active' && v.start_lat).length}</div>
             </CardContent>
           </Card>
           <Card className="border-l-4 border-l-[#B03A2E] shadow-sm">
@@ -444,7 +477,7 @@ const FieldVisitsPage = () => {
 
                 {/* Draw trail for the active visit */}
                 {filteredVisits
-                  .filter(v => (v.status === 'active' || v.status === 'in_progress') && v.checkins?.length > 0)
+                  .filter(v => v.status === 'active' && v.start_lat && v.checkins?.length > 0)
                   .map(v => (
                     <React.Fragment key={`trail-${v.id}`}>
                       <Polyline 
@@ -500,16 +533,19 @@ const FieldVisitsPage = () => {
       {/* Visits List */}
       <div className="space-y-6">
         {/* Upcoming / Scheduled Visits - Priority for Staff */}
-        {!canManageVisits && filteredVisits.filter(v => v.status === 'scheduled' || v.status === 'pending').length > 0 && (
+        {!canManageVisits && filteredVisits.filter(v => v.status === 'active' && !v.start_lat).length > 0 && (
           <Card className="shadow-sm border-l-4 border-l-[#C9972A]">
             <CardHeader className="pb-3">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Clock className="h-5 w-5 text-[#C9972A]" /> Upcoming Scheduled Visits
+                <Clock className="h-5 w-5 text-[#C9972A]" /> My Upcoming Field Visits
               </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {filteredVisits.filter(v => v.status === 'active' && !v.start_lat).length} visit(s) scheduled for you
+              </p>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredVisits.filter(v => v.status === 'scheduled' || v.status === 'pending').map(visit => (
+                {filteredVisits.filter(v => v.status === 'active' && !v.start_lat).map(visit => (
                   <div key={visit.id} className="p-4 rounded-xl border bg-muted/20 flex flex-col justify-between hover:border-primary/30 transition-all">
                     <div>
                       <div className="flex justify-between items-start mb-2">
@@ -520,6 +556,9 @@ const FieldVisitsPage = () => {
                       <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                         <MapPin size={12} /> {visit.branch_name}
                       </p>
+                      {visit.notes && (
+                        <p className="text-xs text-muted-foreground mt-2 italic">📝 {visit.notes}</p>
+                      )}
                     </div>
                     <div className="mt-4 flex gap-2">
                       <Button size="sm" className="flex-1 bg-[#0F6E56] hover:bg-[#094d3c]" onClick={() => handleGPSCheckIn(visit.id)}>
@@ -528,6 +567,38 @@ const FieldVisitsPage = () => {
                       <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => handleViewDetails(visit)}>
                         <TrendingUp size={14} />
                       </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Manager/Admin view: Upcoming visits summary */}
+        {canManageVisits && filteredVisits.filter(v => v.status === 'active' && !v.start_lat).length > 0 && (
+          <Card className="shadow-sm border-l-4 border-l-amber-400">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Clock className="h-5 w-5 text-amber-500" /> Upcoming Scheduled Visits
+                <Badge className="bg-amber-100 text-amber-700 border-0 ml-1">
+                  {filteredVisits.filter(v => v.status === 'active' && !v.start_lat).length}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredVisits.filter(v => v.status === 'active' && !v.start_lat).map(visit => (
+                  <div key={visit.id} className="p-4 rounded-xl border bg-amber-50/30 hover:bg-amber-50/60 transition-all cursor-pointer" onClick={() => handleViewDetails(visit)}>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-xs font-bold text-amber-700">{visit.lead_name}</span>
+                      <Badge variant="outline" className="bg-white text-amber-600 border-amber-200 text-[9px] uppercase">Pending</Badge>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <User size={11} /> {visit.staff_name || 'Unassigned'}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                      <MapPin size={11} /> {visit.branch_name}
                     </div>
                   </div>
                 ))}
@@ -585,15 +656,15 @@ const FieldVisitsPage = () => {
                           <TableCell>
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
                               visit.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' :
-                              (visit.status === 'active' || visit.status === 'in_progress') ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
-                              visit.status === 'scheduled' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                              (visit.status === 'active' && visit.start_lat) ? 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse' :
+                              (visit.status === 'active' && !visit.start_lat) ? 'bg-amber-50 text-amber-700 border-amber-200' :
                               'bg-gray-50 text-gray-700 border-gray-200'
                             }`}>
-                              {visit.status?.replace('_', ' ') || 'UNKNOWN'}
+                              {visit.status === 'active' ? (visit.start_lat ? 'IN PROGRESS' : 'SCHEDULED') : visit.status?.toUpperCase()}
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
-                            {(!canManageVisits && (visit.status === 'in_progress' || visit.status === 'active')) ? (
+                            {(!canManageVisits && visit.status === 'active' && visit.start_lat) ? (
                               <div className="flex justify-end gap-2">
                                 <Button 
                                   size="sm" 
@@ -641,10 +712,11 @@ const FieldVisitsPage = () => {
                         </div>
                         <Badge variant="outline" className={`text-[9px] uppercase font-bold ${
                           visit.status === 'completed' ? 'text-green-700 bg-green-50' :
-                          (visit.status === 'active' || visit.status === 'in_progress') ? 'text-blue-700 bg-blue-50' :
+                          (visit.status === 'active' && visit.start_lat) ? 'text-blue-700 bg-blue-50' :
+                          (visit.status === 'active' && !visit.start_lat) ? 'text-amber-700 bg-amber-50' :
                           'text-gray-700 bg-gray-50'
                         }`}>
-                          {visit.status?.replace('_', ' ')}
+                          {visit.status === 'active' ? (visit.start_lat ? 'IN PROGRESS' : 'SCHEDULED') : visit.status?.toUpperCase()}
                         </Badge>
                       </div>
 
@@ -661,7 +733,7 @@ const FieldVisitsPage = () => {
                       </div>
 
                       <div className="pt-3 border-t border-dashed flex gap-2">
-                        {(!canManageVisits && (visit.status === 'in_progress' || visit.status === 'active')) ? (
+                        {(!canManageVisits && visit.status === 'active' && visit.start_lat) ? (
                           <>
                             <Button 
                               size="sm" 
@@ -880,7 +952,7 @@ const FieldVisitsPage = () => {
             
             {canManageVisits && (
               <div className="space-y-2">
-                <label className="text-sm font-medium">Assign Staff</label>
+                <label className="text-sm font-medium">Assign Field Staff</label>
                 <select 
                   className="w-full p-2 rounded-md border border-input bg-background"
                   value={assignForm.staff}
@@ -892,14 +964,27 @@ const FieldVisitsPage = () => {
                     <option key={s.id} value={s.id}>{s.full_name} ({s.branch_name})</option>
                   ))}
                 </select>
+                <p className="text-[10px] text-muted-foreground">Only field staff roles are shown</p>
               </div>
             )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Scheduled Date (Optional)</label>
+              <input
+                type="datetime-local"
+                className="w-full p-2 rounded-md border border-input bg-background text-sm"
+                value={assignForm.scheduled_date}
+                onChange={(e) => setAssignForm({ ...assignForm, scheduled_date: e.target.value })}
+                min={new Date().toISOString().slice(0, 16)}
+              />
+              <p className="text-[10px] text-muted-foreground">When should the staff member visit?</p>
+            </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Notes (Optional)</label>
               <textarea 
                 className="w-full p-2 rounded-md border border-input bg-background min-h-[80px]"
-                placeholder="Instructions for the staff..."
+                placeholder="Instructions for the staff member..."
                 value={assignForm.notes}
                 onChange={(e) => setAssignForm({ ...assignForm, notes: e.target.value })}
               />

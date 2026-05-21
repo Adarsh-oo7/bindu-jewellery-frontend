@@ -117,6 +117,33 @@ const CallsPage = () => {
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const isManager = user?.role === 'manager' || user?.role === 'sub_manager';
   const isStaff = !isAdmin && !isManager;
+  const isTelecaller = user?.role === 'telecaller' || user?.role === 'staff';
+
+  // Upcoming scheduled call follow-ups for telecallers
+  const { data: upcomingCallsData } = useQuery({
+    queryKey: ['upcoming-call-followups', user?.id],
+    queryFn: () => api.get('/leads/followups/', {
+      params: {
+        followup_type: 'call',
+        completed: false,
+        assigned_to: user?.id,
+        time_frame: 'upcoming',
+      }
+    }).then(r => r.data.results || r.data),
+    enabled: !!user?.id && (isStaff || isTelecaller),
+  });
+
+  const todayFollowupCalls = React.useMemo(() => {
+    if (!upcomingCallsData) return [];
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 2); // today + tomorrow
+    return upcomingCallsData.filter(f => {
+      const d = new Date(f.scheduled_date);
+      return d >= today && d < tomorrow;
+    });
+  }, [upcomingCallsData]);
 
   // Chart data
   const callOutcomeData = React.useMemo(() => {
@@ -755,6 +782,53 @@ const CallsPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Upcoming Calls for Telecallers/Staff */}
+      {(isStaff || isTelecaller) && upcomingCallsData && upcomingCallsData.length > 0 && (
+        <Card className="border-l-4 border-l-blue-500 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Clock className="h-5 w-5 text-blue-500" /> My Upcoming Calls
+              <Badge className="bg-blue-100 text-blue-700 border-0 ml-1">{upcomingCallsData.length}</Badge>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">Scheduled follow-up calls assigned to you</p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {upcomingCallsData.map(followup => (
+                <div key={followup.id} className="p-4 rounded-xl border bg-blue-50/30 hover:bg-blue-50/60 transition-all">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold text-gray-900 text-sm">{followup.lead_name}</p>
+                      {followup.lead_phone && (
+                        <p className="text-xs text-blue-600 flex items-center gap-1 mt-0.5">
+                          <Phone size={11} /> {followup.lead_phone}
+                        </p>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="bg-white text-blue-600 border-blue-200 text-[9px] uppercase">
+                      {followup.priority}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-2">
+                    <Calendar size={11} />
+                    {followup.scheduled_date ? new Date(followup.scheduled_date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—'}
+                  </div>
+                  {followup.note && (
+                    <p className="text-xs text-gray-600 italic bg-white rounded-lg p-2 border border-blue-100">{followup.note}</p>
+                  )}
+                  <button
+                    onClick={() => setIsDialogOpen(true)}
+                    className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-colors"
+                  >
+                    <Phone size={13} /> Log This Call
+                  </button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="overflow-hidden">
         <CardHeader className="bg-card">
