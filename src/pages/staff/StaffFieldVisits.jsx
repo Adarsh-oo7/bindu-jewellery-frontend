@@ -145,7 +145,11 @@ const StaffFieldVisits = () => {
       queryClient.invalidateQueries(['staff-fieldvisits']);
     },
     onError: (error) => {
-      toast.error(error.response?.data?.detail || 'Failed to update location. Please enable GPS.');
+      if (error.response?.status === 404) {
+        toast.error('Server update still deploying. Try again in 2 mins!');
+      } else {
+        toast.error(error.response?.data?.detail || error.message || 'Failed to update location. Please enable GPS.');
+      }
     }
   });
 

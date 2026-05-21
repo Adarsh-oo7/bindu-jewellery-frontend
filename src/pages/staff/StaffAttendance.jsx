@@ -152,7 +152,7 @@ const StaffAttendance = () => {
   // Mutations
   const checkInMutation = useMutation({
     mutationFn: async () => {
-      const coords = await getLocation().catch(() => ({ lat: null, lng: null }));
+      const coords = await getLocation();
       return api.post('/attendance/attendance/gps-checkin/', coords);
     },
     onSuccess: (data) => {
@@ -165,7 +165,7 @@ const StaffAttendance = () => {
 
   const checkOutMutation = useMutation({
     mutationFn: async () => {
-      const coords = await getLocation().catch(() => ({ lat: null, lng: null }));
+      const coords = await getLocation();
       return api.post('/attendance/attendance/checkout/', coords);
     },
     onSuccess: () => {
