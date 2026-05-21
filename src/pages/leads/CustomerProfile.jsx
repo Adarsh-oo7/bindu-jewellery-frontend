@@ -69,7 +69,7 @@ const CustomerProfile = () => {
     <div className="min-h-screen bg-gray-50/60">
       {/* Sticky Header */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
           <button
             onClick={() => navigate(-1)}
             className="flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors group"
@@ -95,7 +95,7 @@ const CustomerProfile = () => {
       </div>
 
       {/* Content */}
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 gap-3 text-gray-400">
             <Loader2 size={28} className="animate-spin" />

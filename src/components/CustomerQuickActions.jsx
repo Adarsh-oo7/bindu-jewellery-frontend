@@ -93,7 +93,7 @@ export default function CustomerQuickActions({ customer }) {
   return (
     <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] border border-white/40 shadow-2xl shadow-[#C9972A]/5 overflow-hidden ring-1 ring-gray-900/5">
       {/* Action Buttons Row */}
-      <div className="flex sm:grid sm:grid-cols-5 divide-x divide-gray-100/50 overflow-x-auto hide-scrollbar">
+      <div className="flex sm:grid sm:grid-flow-col sm:auto-cols-fr divide-x divide-gray-100/50 overflow-x-auto hide-scrollbar">
         {/* Call */}
         <a
           href={`tel:${phone}`}

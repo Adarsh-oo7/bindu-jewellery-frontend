@@ -500,7 +500,7 @@ const CustomerProfileDetail = ({ customerId }) => {
           <div className="space-y-5">
             <div>
               <p className="text-xs font-semibold text-gray-500 mb-1">Total Gold Purchased</p>
-              <p className="text-2xl font-black text-[#C9972A]">{formatGrams(customer.total_spent)} g</p>
+              <p className="text-2xl font-black text-[#C9972A] truncate">{formatGrams(customer.total_spent)} g</p>
             </div>
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
               <div>
@@ -531,7 +531,7 @@ const CustomerProfileDetail = ({ customerId }) => {
       </div>
 
       {/* ── RIGHT MAIN CONTENT: Tabs & Context ── */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         
         {/* Quick Actions Bar (Floating inside main) */}
         <div className="mb-8 relative z-40">
