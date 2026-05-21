@@ -61,6 +61,29 @@ const SalesPage = () => {
   const [matchedLead, setMatchedLead] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isPhoneSearching, setIsPhoneSearching] = useState(false);
+
+  const checkPhone = async (phone) => {
+    if (!phone || phone.length < 10) {
+      setMatchedLead(null);
+      return;
+    }
+    setIsPhoneSearching(true);
+    try {
+      const normalizedPhone = phone.replace(/\s+/g, '').replace(/\+/g, '').replace(/^91/, '');
+      const response = await api.get(`/leads/customers/by-phone/${normalizedPhone}/`);
+      if (response.data && response.data.exists !== false) {
+        setMatchedLead(response.data);
+        setValue('customer_name', response.data.name);
+      } else {
+        setMatchedLead(null);
+      }
+    } catch (error) {
+      setMatchedLead(null);
+    } finally {
+      setIsPhoneSearching(false);
+    }
+  };
 
   React.useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -264,14 +287,7 @@ const SalesPage = () => {
                       setValue('phone', val); // Sync with react-hook-form
                       setPhoneNumber(val);
                       if (val.length >= 10) {
-                        const exact = leadsData?.find(l => l.phone.includes(val) || val.includes(l.phone));
-                        if (exact) {
-                          setMatchedLead(exact);
-                          setValue('customer_name', exact.name); // Autofill name!
-                        } else {
-                          setMatchedLead(null);
-                          setValue('customer_name', ''); // Clear if new customer
-                        }
+                        checkPhone(val);
                       } else {
                         setMatchedLead(null);
                         setValue('customer_name', '');
@@ -282,8 +298,13 @@ const SalesPage = () => {
                   
                   {phoneNumber.length >= 10 && (
                     <div className="mt-3 space-y-2 animate-in fade-in duration-300">
-                      {matchedLead ? (
-                        <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-100 mb-2">
+                      {isPhoneSearching ? (
+                        <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground bg-gray-50 rounded-xl border border-gray-100 mb-2">
+                          <Loader2 className="animate-spin h-4 w-4 text-primary" />
+                          <span>Searching CRM customer database...</span>
+                        </div>
+                      ) : matchedLead ? (
+                        <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-100 mb-2 animate-in slide-in-from-top-1 duration-200">
                           <div className="w-10 h-10 rounded-xl bg-[#0F6E56] text-white flex items-center justify-center font-bold">
                             {matchedLead.name?.[0]?.toUpperCase() || '?'}
                           </div>
@@ -294,7 +315,7 @@ const SalesPage = () => {
                           </div>
                         </div>
                       ) : (
-                        <div className="border-l-2 border-primary pl-3 space-y-2">
+                        <div className="border-l-2 border-primary pl-3 space-y-2 animate-in slide-in-from-top-1 duration-200">
                           <Label htmlFor="customer_name" className="text-primary flex items-center justify-between">
                             <span>New Customer Name</span>
                             <span className="text-[11px] text-[#C9972A] font-bold">
