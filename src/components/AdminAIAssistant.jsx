@@ -93,7 +93,9 @@ const AdminAIAssistant = () => {
         }
       }
       
-      const responseText = resp?.response || "I processed your request but encountered a response parsing anomaly.";
+      const responseText = resp?.response || 
+        (resp && typeof resp === 'object' ? (resp.detail || resp.error || JSON.stringify(resp)) : String(resp || '')) ||
+        "I processed your request but encountered a response parsing anomaly.";
       setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
       refetchUsage();
       if (resp?.rate_limited) {
