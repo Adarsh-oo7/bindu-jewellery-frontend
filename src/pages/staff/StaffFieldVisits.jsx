@@ -7,9 +7,20 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { MapPin, Navigation, Clock, CheckCircle, Navigation2, FileCheck, Phone, Map, Plus, Loader2 } from 'lucide-react';
+import { MapPin, Navigation, Clock, CheckCircle, Navigation2, FileCheck, Phone, Map as MapIcon, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+
+// Fix leaflet default icon
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 const StaffFieldVisits = () => {
   const { user } = useAuth();
@@ -183,6 +194,52 @@ const StaffFieldVisits = () => {
                 <CheckCircle size={16} className="mr-2" /> Complete
               </Button>
             </div>
+
+            {/* Live Tracking Map */}
+            {activeVisit.start_lat && activeVisit.start_lng && (
+              <div className="mt-4 border rounded-xl overflow-hidden h-[250px] relative z-0">
+                <MapContainer 
+                  center={[parseFloat(activeVisit.start_lat), parseFloat(activeVisit.start_lng)]} 
+                  zoom={14} 
+                  style={{ height: '100%', width: '100%' }}
+                >
+                  <TileLayer
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  />
+                  
+                  {/* Start Point */}
+                  <Marker position={[parseFloat(activeVisit.start_lat), parseFloat(activeVisit.start_lng)]}>
+                    <Popup>Visit Started</Popup>
+                  </Marker>
+                  
+                  {/* Checkins */}
+                  {activeVisit.checkins?.map(checkin => (
+                    <Marker key={checkin.id} position={[parseFloat(checkin.lat), parseFloat(checkin.lng)]}>
+                      <Popup>
+                        <div className="text-xs">
+                          <p className="font-bold">Check-in</p>
+                          <p>{format(new Date(checkin.timestamp), 'hh:mm a')}</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+                  
+                  {/* Route Polyline */}
+                  {activeVisit.checkins && activeVisit.checkins.length > 0 && (
+                    <Polyline 
+                      positions={[
+                        [parseFloat(activeVisit.start_lat), parseFloat(activeVisit.start_lng)],
+                        ...activeVisit.checkins.map(c => [parseFloat(c.lat), parseFloat(c.lng)])
+                      ]} 
+                      color="#0F6E56" 
+                      weight={3}
+                      dashArray="5, 10"
+                    />
+                  )}
+                </MapContainer>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -217,7 +274,7 @@ const StaffFieldVisits = () => {
 
       {scheduledVisits.length === 0 && !activeVisit && (
         <div className="bg-gray-50 border border-dashed border-gray-300 rounded-xl p-8 text-center">
-          <Map className="mx-auto h-12 w-12 text-gray-300 mb-3" />
+          <MapIcon className="mx-auto h-12 w-12 text-gray-300 mb-3" />
           <p className="text-gray-500 font-medium">No scheduled visits</p>
           <p className="text-xs text-gray-400 mt-1">Check back later or ask your manager to assign leads.</p>
         </div>
