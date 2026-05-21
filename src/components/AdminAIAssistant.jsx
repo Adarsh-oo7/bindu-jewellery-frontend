@@ -79,10 +79,17 @@ const AdminAIAssistant = () => {
       // Defensive: If the backend returns a StreamingHttpResponse with space padding,
       // Axios might deliver it as a raw string instead of a parsed object.
       if (typeof resp === 'string') {
-        try {
-          resp = JSON.parse(resp.trim());
-        } catch (e) {
-          console.error("Failed to parse raw streaming AI response:", e);
+        const start = resp.indexOf('{');
+        const end = resp.lastIndexOf('}');
+        if (start !== -1 && end !== -1) {
+          const cleanJson = resp.substring(start, end + 1);
+          try {
+            resp = JSON.parse(cleanJson);
+          } catch (e) {
+            console.error("Failed to parse extracted streaming AI JSON:", e, "Cleaned:", cleanJson);
+          }
+        } else {
+          console.warn("Could not find JSON bounds in raw response string:", resp);
         }
       }
       
@@ -103,9 +110,13 @@ const AdminAIAssistant = () => {
     onError: (error) => {
       let resp = error.response?.data;
       if (typeof resp === 'string') {
-        try {
-          resp = JSON.parse(resp.trim());
-        } catch (e) {}
+        const start = resp.indexOf('{');
+        const end = resp.lastIndexOf('}');
+        if (start !== -1 && end !== -1) {
+          try {
+            resp = JSON.parse(resp.substring(start, end + 1));
+          } catch (e) {}
+        }
       }
       const status = error.response?.status;
       const isQuota = status === 429 || resp?.error === 'rate_limit';
