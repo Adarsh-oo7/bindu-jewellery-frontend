@@ -281,27 +281,34 @@ const SalesPage = () => {
                   {errors.phone && <p className="text-sm text-destructive">{errors.phone.message}</p>}
                   
                   {phoneNumber.length >= 10 && (
-                    <div className="mt-3 space-y-2 border-l-2 border-primary pl-3 animate-in fade-in duration-300">
-                      <Label htmlFor="customer_name" className="text-primary flex items-center justify-between">
-                        <span>Customer Name</span>
-                        {matchedLead ? (
-                          <span className="text-[11px] text-green-600 font-bold flex items-center gap-1">
-                            ✓ Existing Customer
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-[#C9972A] font-bold">
-                            New Customer profile will be created
-                          </span>
-                        )}
-                      </Label>
-                      <Input 
-                        id="customer_name" 
-                        placeholder={matchedLead ? matchedLead.name : "Enter customer name"} 
-                        {...register('customer_name')}
-                        readOnly={!!matchedLead}
-                        className={matchedLead ? "bg-green-50/50 border-green-200 text-green-800 font-medium focus-visible:ring-green-500 cursor-not-allowed" : ""}
-                      />
-                      {errors.customer_name && <p className="text-sm text-destructive">{errors.customer_name.message}</p>}
+                    <div className="mt-3 space-y-2 animate-in fade-in duration-300">
+                      {matchedLead ? (
+                        <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-100 mb-2">
+                          <div className="w-10 h-10 rounded-xl bg-[#0F6E56] text-white flex items-center justify-center font-bold">
+                            {matchedLead.name?.[0]?.toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-gray-900 text-sm">{matchedLead.name}</p>
+                            <p className="text-xs text-gray-600">{matchedLead.phone}</p>
+                            <p className="text-[10px] text-green-600 font-bold mt-0.5">✓ Existing Customer Linked</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border-l-2 border-primary pl-3 space-y-2">
+                          <Label htmlFor="customer_name" className="text-primary flex items-center justify-between">
+                            <span>New Customer Name</span>
+                            <span className="text-[11px] text-[#C9972A] font-bold">
+                              New Customer profile will be created
+                            </span>
+                          </Label>
+                          <Input 
+                            id="customer_name" 
+                            placeholder="Enter customer name" 
+                            {...register('customer_name')}
+                          />
+                          {errors.customer_name && <p className="text-sm text-destructive">{errors.customer_name.message}</p>}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
