@@ -31,6 +31,18 @@ const StaffFieldVisits = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedLeadId, setSelectedLeadId] = useState('');
 
+  const [isCompleteOpen, setIsCompleteOpen] = useState(false);
+  const [completeForm, setCompleteForm] = useState({
+    outcome: 'interested',
+    notes: '',
+    expected_grams: '',
+    is_advance_booking: false,
+    needs_followup: false,
+    followup_type: 'call',
+    followup_date: '',
+    followup_notes: ''
+  });
+
   // Fetch only this staff's field visits
   const { data: visitsData, isLoading } = useQuery({
     queryKey: ['staff-fieldvisits'],
@@ -123,14 +135,36 @@ const StaffFieldVisits = () => {
     }
   });
 
-  const endVisitMutation = useMutation({
+  const reachedClientMutation = useMutation({
     mutationFn: async (visitId) => {
       const coords = await getLocation();
-      return api.post(`/field-visits/field-visits/${visitId}/end/`, coords);
+      return api.post(`/field-visits/field-visits/${visitId}/reached-client/`, coords);
+    },
+    onSuccess: () => {
+      toast.success('Reached client! Location saved to profile.');
+      queryClient.invalidateQueries(['staff-fieldvisits']);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to update location. Please enable GPS.');
+    }
+  });
+
+  const endVisitMutation = useMutation({
+    mutationFn: async (visitId) => {
+      // Try to get coords but don't fail if they can't be fetched on complete
+      let coords = { lat: null, lng: null };
+      try { coords = await getLocation(); } catch (e) {}
+      
+      return api.post(`/field-visits/field-visits/${visitId}/end/`, {
+        ...coords,
+        ...completeForm
+      });
     },
     onSuccess: () => {
       toast.success('Field visit completed!');
       queryClient.invalidateQueries(['staff-fieldvisits']);
+      setIsCompleteOpen(false);
+      setCompleteForm({ outcome: 'interested', notes: '', expected_grams: '', is_advance_booking: false, needs_followup: false, followup_type: 'call', followup_date: '', followup_notes: '' });
     }
   });
 
@@ -180,20 +214,27 @@ const StaffFieldVisits = () => {
             <div className="flex gap-2">
               <Button 
                 onClick={() => checkInMutation.mutate({ visitId: activeVisit.id, note: 'Regular update' })}
-                className="flex-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border-none"
+                className="flex-1 bg-blue-50 text-blue-700 hover:bg-blue-100 border-none text-xs px-2"
                 variant="outline"
                 disabled={checkInMutation.isPending}
               >
-                <MapPin size={16} className="mr-2" /> Log Location
+                <MapPin size={14} className="mr-1" /> Log Loc
               </Button>
               <Button 
-                onClick={() => endVisitMutation.mutate(activeVisit.id)}
-                className="flex-1 bg-[#0F6E56] hover:bg-[#0a5240] text-white"
-                disabled={endVisitMutation.isPending}
+                onClick={() => reachedClientMutation.mutate(activeVisit.id)}
+                className="flex-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-none text-xs px-2"
+                variant="outline"
+                disabled={reachedClientMutation.isPending}
               >
-                <CheckCircle size={16} className="mr-2" /> Complete
+                <Navigation2 size={14} className="mr-1" /> Reached Client
               </Button>
             </div>
+            <Button 
+              onClick={() => setIsCompleteOpen(true)}
+              className="w-full bg-[#0F6E56] hover:bg-[#0a5240] text-white"
+            >
+              <CheckCircle size={16} className="mr-2" /> Complete Visit
+            </Button>
 
             {/* Live Tracking Map */}
             {activeVisit.start_lat && activeVisit.start_lng && (
@@ -344,6 +385,126 @@ const StaffFieldVisits = () => {
               Create Visit
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog for completing a visit */}
+      <Dialog open={isCompleteOpen} onOpenChange={setIsCompleteOpen}>
+        <DialogContent className="max-w-md bg-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900">Complete Field Visit</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-semibold text-gray-700 block mb-1">Outcome</label>
+              <select
+                value={completeForm.outcome}
+                onChange={e => setCompleteForm(f => ({...f, outcome: e.target.value}))}
+                className="w-full h-10 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]"
+              >
+                <option value="interested">Interested</option>
+                <option value="converted">Converted (Purchased)</option>
+                <option value="call_later">Call Later</option>
+                <option value="not_interested">Not Interested</option>
+              </select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <input 
+                type="checkbox" 
+                id="adv-booking" 
+                checked={completeForm.is_advance_booking} 
+                onChange={e => setCompleteForm(f => ({...f, is_advance_booking: e.target.checked}))}
+                className="rounded border-gray-300 text-[#0F6E56] focus:ring-[#0F6E56]"
+              />
+              <label htmlFor="adv-booking" className="text-sm font-semibold text-gray-700">Advance Booking Made?</label>
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold text-gray-700 block mb-1">Expected Grams / Sold Grams</label>
+              <input
+                type="number"
+                placeholder="e.g. 50"
+                value={completeForm.expected_grams}
+                onChange={e => setCompleteForm(f => ({...f, expected_grams: e.target.value}))}
+                className="w-full h-10 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-semibold text-gray-700 block mb-1">Visit Notes</label>
+              <textarea
+                placeholder="Details about what happened..."
+                value={completeForm.notes}
+                onChange={e => setCompleteForm(f => ({...f, notes: e.target.value}))}
+                className="w-full min-h-[80px] rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]"
+              />
+            </div>
+
+            <div className="pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-bold text-gray-900 block">Needs Follow-up?</label>
+                <input 
+                  type="checkbox" 
+                  checked={completeForm.needs_followup} 
+                  onChange={e => setCompleteForm(f => ({...f, needs_followup: e.target.checked}))}
+                  className="rounded border-gray-300 text-[#0F6E56] focus:ring-[#0F6E56] w-5 h-5"
+                />
+              </div>
+
+              {completeForm.needs_followup && (
+                <div className="space-y-3 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                  <div className="flex gap-2">
+                    <Button 
+                      type="button"
+                      variant={completeForm.followup_type === 'call' ? 'default' : 'outline'}
+                      className={completeForm.followup_type === 'call' ? 'bg-[#0F6E56] hover:bg-[#0a5240] text-white flex-1' : 'flex-1'}
+                      onClick={() => setCompleteForm(f => ({...f, followup_type: 'call'}))}
+                    >
+                      Call
+                    </Button>
+                    <Button 
+                      type="button"
+                      variant={completeForm.followup_type === 'visit' ? 'default' : 'outline'}
+                      className={completeForm.followup_type === 'visit' ? 'bg-[#0F6E56] hover:bg-[#0a5240] text-white flex-1' : 'flex-1'}
+                      onClick={() => setCompleteForm(f => ({...f, followup_type: 'visit'}))}
+                    >
+                      Visit
+                    </Button>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">Date & Time</label>
+                    <input
+                      type="datetime-local"
+                      value={completeForm.followup_date}
+                      onChange={e => setCompleteForm(f => ({...f, followup_date: e.target.value}))}
+                      className="w-full h-10 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]"
+                      min={new Date().toISOString().slice(0, 16)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-600 block mb-1">Follow-up Note</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Call to confirm advance payment"
+                      value={completeForm.followup_notes}
+                      onChange={e => setCompleteForm(f => ({...f, followup_notes: e.target.value}))}
+                      className="w-full h-10 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Button
+              onClick={() => endVisitMutation.mutate(activeVisit?.id)}
+              className="w-full bg-[#0F6E56] hover:bg-[#0a5240] text-white font-bold mt-4"
+              disabled={endVisitMutation.isPending}
+            >
+              {endVisitMutation.isPending ? <Loader2 className="animate-spin mr-2" size={16} /> : <CheckCircle className="mr-2" size={16} />}
+              Submit & Complete
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
