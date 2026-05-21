@@ -75,10 +75,21 @@ const AdminAIAssistant = () => {
       history: messages.slice(-6).map(m => ({ role: m.role, parts: [m.content] }))
     }),
     onSuccess: (data) => {
-      const resp = data.data;
-      setMessages(prev => [...prev, { role: 'assistant', content: resp.response }]);
+      let resp = data.data;
+      // Defensive: If the backend returns a StreamingHttpResponse with space padding,
+      // Axios might deliver it as a raw string instead of a parsed object.
+      if (typeof resp === 'string') {
+        try {
+          resp = JSON.parse(resp.trim());
+        } catch (e) {
+          console.error("Failed to parse raw streaming AI response:", e);
+        }
+      }
+      
+      const responseText = resp?.response || "I processed your request but encountered a response parsing anomaly.";
+      setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
       refetchUsage();
-      if (resp.rate_limited) {
+      if (resp?.rate_limited) {
         setRateLimited(true);
         setCooldown(35);
         const timer = setInterval(() => {
@@ -90,7 +101,12 @@ const AdminAIAssistant = () => {
       }
     },
     onError: (error) => {
-      const resp = error.response?.data;
+      let resp = error.response?.data;
+      if (typeof resp === 'string') {
+        try {
+          resp = JSON.parse(resp.trim());
+        } catch (e) {}
+      }
       const status = error.response?.status;
       const isQuota = status === 429 || resp?.error === 'rate_limit';
       let msg = resp?.response || resp?.detail || resp?.error || "Connection timed out. Please try again.";
@@ -314,7 +330,7 @@ const AdminAIAssistant = () => {
                         )}
                       </div>
                       
-                      {m.role === 'assistant' && (m.content.includes('|') || m.content.includes('##') || m.content.length > 200) && (
+                      {m.role === 'assistant' && m.content && (m.content.includes('|') || m.content.includes('##') || m.content.length > 200) && (
                         <button 
                           onClick={() => downloadReportPDF(m.content)}
                           className="self-start flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-gray-50 text-[#C9972A] rounded-full text-[10px] font-bold transition-all border border-gray-200 hover:border-[#C9972A] shadow-sm active:scale-95"
